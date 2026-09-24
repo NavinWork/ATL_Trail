@@ -21,7 +21,6 @@ class UsageController extends Controller
         $validated = $request->validated();
         $idempotencyKey = $validated['idempotency_key'];
 
-        // 1. Check existing record first (fast path)
         $existing = UsageEvent::where('idempotency_key', $idempotencyKey)->first();
         if ($existing) {
             return response()->json([
@@ -32,7 +31,7 @@ class UsageController extends Controller
             ], 200);
         }
 
-        // 2. High-throughput atomic insert with concurrency race protection
+       // High-throughput atomic insert with concurrency race protection
         try {
             $event = DB::transaction(function () use ($validated, $idempotencyKey) {
                 $usageDate = Carbon::parse($validated['usage_date']);
@@ -45,7 +44,7 @@ class UsageController extends Controller
                     'processed_at' => now(),
                 ]);
 
-                // Immediately update the daily summary rollup to keep dashboard fast and current
+                // update the daily summary rollup
                 DailyUsageSummary::incrementUnits(
                     $validated['customer_id'],
                     $usageDate->toDateString(),
@@ -62,7 +61,7 @@ class UsageController extends Controller
                 'event_id' => $event->id,
             ], 201);
         } catch (QueryException $e) {
-            // Check if concurrency race hit the unique constraint on idempotency_key
+            // Check unique constraint on idempotency_key
             if (str_contains($e->getMessage(), 'UNIQUE') || str_contains($e->getMessage(), 'Integrity constraint') || $e->getCode() == 23000) {
                 $existing = UsageEvent::where('idempotency_key', $idempotencyKey)->first();
 

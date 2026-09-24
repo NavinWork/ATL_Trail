@@ -56,17 +56,17 @@ class Subscription extends Model
         $transition = Carbon::parse($transitionTime);
         $cycleStart = Carbon::parse($this->current_cycle_start)->startOfDay();
         $cycleEnd = Carbon::parse($this->current_cycle_end)->endOfDay();
-        $totalCycleSeconds = max(1, $cycleEnd->diffInSeconds($cycleStart));
+        $totalCycleSeconds = max(1, $cycleEnd->timestamp - $cycleStart->timestamp);
 
-        // Find current active segment that contains transition time
+        // Find the active segment contains transition time
         $currentSegment = $this->segments()
             ->where('starts_at', '<=', $transition)
             ->where('ends_at', '>=', $transition)
             ->first();
 
         if ($currentSegment) {
-            // Shorten current segment
-            $seg1Duration = max(0, $transition->diffInSeconds(Carbon::parse($currentSegment->starts_at)));
+            // Short segment
+            $seg1Duration = max(0, $transition->timestamp - Carbon::parse($currentSegment->starts_at)->timestamp);
             $seg1Ratio = $seg1Duration / $totalCycleSeconds;
             $oldPlan = $currentSegment->plan;
 
@@ -78,7 +78,7 @@ class Subscription extends Model
         }
 
         // Create new segment for the remainder of the cycle
-        $seg2Duration = max(0, $cycleEnd->diffInSeconds($transition));
+        $seg2Duration = max(0, $cycleEnd->timestamp - $transition->timestamp);
         $seg2Ratio = $seg2Duration / $totalCycleSeconds;
 
         $this->segments()->create([

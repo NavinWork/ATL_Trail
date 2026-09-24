@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\DailyUsageSummary;
 use App\Models\Merchant;
+use App\Models\Plan;
+use App\Models\Subscription;
 use App\Services\PlanCacheService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -125,6 +127,18 @@ class MerchantDashboardController extends Controller
             ];
         }
 
+        // Plans and Subscriptions for the Plans section
+        $plans = Plan::where('merchant_id', $merchantId)
+            ->orderBy('base_price')
+            ->get();
+
+        $subscriptions = Subscription::whereIn('customer_id', $customerIds)
+            ->with(['customer', 'plan', 'segments' => function ($q) {
+                $q->orderBy('starts_at', 'desc');
+            }])
+            ->orderBy('status')
+            ->get();
+
         return [
             'merchant' => [
                 'id' => $merchant->id,
@@ -147,6 +161,8 @@ class MerchantDashboardController extends Controller
             'top_5_customers' => $top5Customers,
             'churn_risk' => $churnRiskCustomers,
             'daily_usage_trend' => $dailyUsageTrend,
+            'plans' => $plans,
+            'subscriptions' => $subscriptions,
             'system_status' => [
                 'cache_driver' => config('cache.default'),
                 'plan_cache_ttl' => '10m',
